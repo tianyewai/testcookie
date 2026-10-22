@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cookie-test</title>
+</head>
+<body style="font-family:monospace;padding:16px;font-size:13px;">
+<h3>iOS 27.2 WKWebView cookie 判别</h3>
+<pre id="log"></pre>
+<script>
+var API = 'https://postman-echo.com/headers';
+
+function out(m) {
+  document.getElementById('log').textContent += m + '\n';
+  try { window.webkit.messageHandlers.log.postMessage(m); } catch (e) {}
+}
+
+// 模式1：XHR + withCredentials
+(function () {
+  var x = new XMLHttpRequest();
+  x.open('GET', API + '?tag=xhr-with');
+  x.withCredentials = true;
+  x.onload  = function () { out('[xhr-with] status=' + x.status); };
+  x.onerror = function () { out('[xhr-with] 响应被CORS拦(预期,看WebInspector)'); };
+  x.send();
+})();
+
+// 模式2：XHR 无凭据（等价生产现状）
+(function () {
+  var x = new XMLHttpRequest();
+  x.open('GET', API + '?tag=xhr-without');
+  x.onload = function () {
+    out('[xhr-without] status=' + x.status);
+    try { out('  服务端看到的cookie: ' + (JSON.parse(x.responseText).headers.cookie || '无')); } catch (e) {}
+  };
+  x.onerror = function () { out('[xhr-without] error'); };
+  x.send();
+})();
+
+// 模式3：fetch credentials:include
+fetch(API + '?tag=fetch-include', { credentials: 'include' })
+  .then(function (r) { return r.text(); })
+  .then(function (t) { out('[fetch-include] ' + t.slice(0, 160)); })
+  .catch(function (e) { out('[fetch-include] 被CORS拦(预期,看WebInspector)'); });
+
+// 模式4：fetch credentials:same-origin（跨站即不带）
+fetch(API + '?tag=fetch-sameorigin', { credentials: 'same-origin' })
+  .then(function (r) { return r.text(); })
+  .then(function (t) { out('[fetch-sameorigin] 服务端看到的cookie: ' + (JSON.parse(t).headers.cookie || '无')); })
+  .catch(function (e) { out('[fetch-sameorigin] blocked: ' + e); });
+
+out('[hint] 最终判定以 Web Inspector Network 里各 tag 请求的 Request Headers -> Cookie 为准');
+</script>
+</body>
+</html>
